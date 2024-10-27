@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '../contexts/SupabaseContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   id: number;
@@ -9,8 +10,9 @@ interface Message {
   sentat: string;
 }
 
-const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
+const PatientChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
   const supabase = useSupabase();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -31,6 +33,26 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    const checkChatRoomStatus = async () => {
+      const { data } = await supabase
+        .from('chatrooms')
+        .select('isactive')
+        .eq('id', chatRoomId)
+        .single();
+
+      if (data && !data.isactive) {
+        navigate('/patient-dashboard');
+      }
+    };
+
+    const interval = setInterval(() => {
+      checkChatRoomStatus();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [supabase, chatRoomId, navigate]);
+
   const sendMessage = async () => {
     await supabase.from('messages').insert([{ chatroomid: chatRoomId, senderid: currentUserId, content: newMessage }]);
     setNewMessage('');
@@ -50,10 +72,10 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
             <div
               key={msg.id}
               className={`p-4 rounded-lg max-w-xs md:max-w-md ${
-                msg.senderid === currentUserId ? 'bg-blue-500 text-white ml-auto' : 'bg-gray-200 text-black mr-auto'
+                msg.senderid === currentUserId ? 'bg-green-500 text-white ml-auto' : 'bg-gray-200 text-black mr-auto'
               }`}
             >
-              <strong>{msg.senderid === currentUserId ? 'Yo' : 'Otro'}:</strong> {msg.content}
+              <strong>{msg.senderid === currentUserId ? 'Yo' : 'Proveedor'}:</strong> {msg.content}
             </div>
           ))}
           <div ref={messagesEndRef} />
@@ -67,7 +89,7 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
           placeholder="Escribe un mensaje..."
           className="border p-2 w-full rounded mb-2 md:mb-0"
         />
-        <button onClick={sendMessage} className="bg-blue-600 text-white p-2 rounded w-full md:w-auto md:ml-2">
+        <button onClick={sendMessage} className="bg-green-600 text-white p-2 rounded w-full md:w-auto md:ml-2">
           Enviar
         </button>
       </div>
@@ -75,4 +97,6 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
   );
 };
 
-export default ChatRoom;
+
+
+export default PatientChatRoom;

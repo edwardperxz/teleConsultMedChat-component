@@ -9,7 +9,7 @@ interface Message {
   sentat: string;
 }
 
-const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
+const ProviderChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
   const supabase = useSupabase();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -42,6 +42,15 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
     setMessages(data as Message[] || []);
   };
 
+  const endVisit = async () => {
+    const timestamp = new Date().toISOString();
+    await supabase
+      .from('chatrooms')
+      .update({ isactive: false, endedat: timestamp })
+      .eq('id', chatRoomId);
+      window.location.href = '/provider-dashboard';
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <div className="flex-1 p-4 overflow-y-auto">
@@ -53,7 +62,7 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
                 msg.senderid === currentUserId ? 'bg-blue-500 text-white ml-auto' : 'bg-gray-200 text-black mr-auto'
               }`}
             >
-              <strong>{msg.senderid === currentUserId ? 'Yo' : 'Otro'}:</strong> {msg.content}
+              <strong>{msg.senderid === currentUserId ? 'Yo' : 'Paciente'}:</strong> {msg.content}
             </div>
           ))}
           <div ref={messagesEndRef} />
@@ -70,9 +79,12 @@ const ChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ cha
         <button onClick={sendMessage} className="bg-blue-600 text-white p-2 rounded w-full md:w-auto md:ml-2">
           Enviar
         </button>
+        <button onClick={endVisit} className="bg-red-600 text-white p-2 rounded w-full md:w-auto md:ml-2 mt-2">
+          Finalizar Visita
+        </button>
       </div>
     </div>
   );
 };
 
-export default ChatRoom;
+export default ProviderChatRoom;
