@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useSupabase } from '../contexts/SupabaseContext';
 
-const WaitingRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
-  const supabase = useSupabase();
+const WaitingRoom: React.FC = () => {
+  const { patientId } = useParams<{ patientId?: string }>();
   const navigate = useNavigate();
+  const supabase = useSupabase();
   const [isActive, setIsActive] = useState(false);
+  const [chatRoomId, setChatRoomId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!patientId) {
+      navigate('/patient-dashboard');
+    }
+  }, [patientId, navigate]);
 
   useEffect(() => {
     const checkChatRoom = async () => {
       const { data, error } = await supabase
         .from('chatrooms')
         .select('*')
-        .eq('id', chatRoomId)
+        .eq('patientid', parseInt(patientId!))
+        .order('createdat', { ascending: false })
+        .limit(1)
         .single();
-
       if (data) {
-        setIsActive(data.isactive); 
+        setIsActive(data.isactive);
+        setChatRoomId(data.id);
       } else if (error) {
         console.error('Error fetching chat room:', error.message, error.details, error.hint);
       }
@@ -24,16 +34,16 @@ const WaitingRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ 
 
     const interval = setInterval(() => {
       checkChatRoom();
-    }, 3000); // Check every 5 seconds
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [supabase, chatRoomId, currentUserId, navigate]);
+  }, [supabase, patientId]);
 
   useEffect(() => {
-    if (isActive) {
-      navigate(`/patient-chat-room/${currentUserId}/${chatRoomId}`);
+    if (isActive && chatRoomId) {
+      navigate(`/patient-chat-room/${patientId}/${chatRoomId}`);
     }
-  }, [isActive, navigate, currentUserId, chatRoomId]);
+  }, [isActive, chatRoomId, navigate, patientId]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">

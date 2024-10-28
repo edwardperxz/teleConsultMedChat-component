@@ -9,11 +9,11 @@ import PatientChatRoom from './pages/PatientChatRoom';
 import WaitingRoom from './pages/WaitingRoom';
 import { SupabaseProvider } from './contexts/SupabaseContext';
 import { SidebarProvider } from './contexts/SidebarContext';
-import { checkEnvVariables } from './utils/checkEnv'; // Si es necesario para depuración
+import { checkEnvVariables } from './utils/checkEnv';
+import ErrorPage from './pages/Error';
 
 const App: React.FC = () => {
-  checkEnvVariables(); // Verificar variables de entorno
-
+  checkEnvVariables(); 
   return (
     <SupabaseProvider>
       <SidebarProvider>
@@ -24,12 +24,13 @@ const App: React.FC = () => {
               <Header />
               <main className="flex-1 p-4">
                 <Routes>
-                  <Route path="/" element={<PatientDashboard />} />
-                  <Route path="/patient-dashboard" element={<PatientDashboard />} />
-                  <Route path="/provider-dashboard" element={<ProviderDashboard />} />
-                  <Route path="/provider-chat-room/:providerId/:chatRoomId" element={<ProviderChatRoomWithId />} />
-                  <Route path="/patient-chat-room/:patientId/:chatRoomId" element={<PatientChatRoomWithId />} />
-                  <Route path="/waiting-room/:patientId/:chatRoomId" element={<WaitingRoomWithId />} />
+                  <Route key="home" path="/" element={<PatientDashboard/>} />
+                  <Route key="patient-dashboard" path="/patient-dashboard" element={<PatientDashboard/>} />
+                  <Route key="provider-dashboard" path="/provider-dashboard" element={<ProviderDashboard/>} />
+                  <Route key="provider-chat-room" path="/provider-chat-room/:providerId/:chatRoomId" element={<ProviderChatRoomWrapper/>} />
+                  <Route key="patient-chat-room" path="/patient-chat-room/:patientId/:chatRoomId" element={<PatientChatRoomWrapper/>} />
+                  <Route key="waiting-room" path="/waiting-room/:patientId/:chatRoomId" element={<WaitingRoomWrapper/>} />
+                  <Route key="error" path="/error" element={<ErrorPage/>} />
                 </Routes>
               </main>
             </div>
@@ -40,22 +41,28 @@ const App: React.FC = () => {
   );
 };
 
-const ProviderChatRoomWithId: React.FC = () => {
+const ProviderChatRoomWrapper: React.FC = () => {
   const { providerId, chatRoomId } = useParams<{ providerId: string; chatRoomId: string }>();
-  const currentUserId = parseInt(providerId || '0');
-  return <ProviderChatRoom chatRoomId={parseInt(chatRoomId || '0')} currentUserId={currentUserId} />;
+  if (!providerId || !chatRoomId) {
+    return <ErrorPage />;
+  }
+  return <ProviderChatRoom />;
 };
 
-const PatientChatRoomWithId: React.FC = () => {
+const PatientChatRoomWrapper: React.FC = () => {
   const { patientId, chatRoomId } = useParams<{ patientId: string; chatRoomId: string }>();
-  const currentUserId = parseInt(patientId || '0');
-  return <PatientChatRoom chatRoomId={parseInt(chatRoomId || '0')} currentUserId={currentUserId} />;
+  if (!patientId || !chatRoomId) {
+    return <ErrorPage />;
+  }
+  return <PatientChatRoom />;
 };
 
-const WaitingRoomWithId: React.FC = () => {
+const WaitingRoomWrapper: React.FC = () => {
   const { patientId, chatRoomId } = useParams<{ patientId: string; chatRoomId: string }>();
-  const currentUserId = parseInt(patientId || '0');
-  return <WaitingRoom chatRoomId={parseInt(chatRoomId || '0')} currentUserId={currentUserId} />;
+  if (!patientId || !chatRoomId) {
+    return <ErrorPage />; 
+  }
+  return <WaitingRoom />;
 };
 
 export default App;

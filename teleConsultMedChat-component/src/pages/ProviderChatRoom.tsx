@@ -1,89 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useSupabase } from '../contexts/SupabaseContext';
+import ChatRoom from '../components/ChatRoom';
 
-interface Message {
-  id: number;
-  senderid: number;
-  content: string;
-  chatroomid: number;
-  sentat: string;
-}
-
-const ProviderChatRoom: React.FC<{ chatRoomId: number; currentUserId: number }> = ({ chatRoomId, currentUserId }) => {
+const ProviderChatRoom: React.FC = () => {
+  const { providerId, chatRoomId } = useParams<{ providerId?: string; chatRoomId?: string }>();
+  const navigate = useNavigate();
   const supabase = useSupabase();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chatroomid', chatRoomId)
-        .order('sentat', { ascending: true });
-      setMessages(data as Message[] || []);
-    };
-    fetchMessages();
-  }, [supabase, chatRoomId]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const sendMessage = async () => {
-    await supabase.from('messages').insert([{ chatroomid: chatRoomId, senderid: currentUserId, content: newMessage }]);
-    setNewMessage('');
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chatroomid', chatRoomId)
-      .order('sentat', { ascending: true });
-    setMessages(data as Message[] || []);
-  };
+    if (!chatRoomId || !providerId) {
+      navigate('/error');
+    }
+  }, [chatRoomId, providerId, navigate]);
 
   const endVisit = async () => {
-    const timestamp = new Date().toISOString();
-    await supabase
-      .from('chatrooms')
-      .update({ isactive: false, endedat: timestamp })
-      .eq('id', chatRoomId);
-      window.location.href = '/provider-dashboard';
+    try {
+      await supabase
+        .from('chatrooms')
+        .update({ isactive: false, endedat: new Date().toISOString() }) // finaliza la cita
+        .eq('id', chatRoomId!);
+      console.log('Visit ended, chat room is now inactive');
+      navigate('/provider-dashboard');
+    } catch (error: any) {
+      console.error('Error ending visit:', error.message, error.details, error.hint);
+    }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`p-4 rounded-lg max-w-xs md:max-w-md ${
-                msg.senderid === currentUserId ? 'bg-blue-500 text-white ml-auto' : 'bg-gray-200 text-black mr-auto'
-              }`}
-            >
-              <strong>{msg.senderid === currentUserId ? 'Yo' : 'Paciente'}:</strong> {msg.content}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-      <div className="p-4 bg-white border-t border-gray-300">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Escribe un mensaje..."
-          className="border p-2 w-full rounded mb-2 md:mb-0"
-        />
-        <button onClick={sendMessage} className="bg-blue-600 text-white p-2 rounded w-full md:w-auto md:ml-2">
-          Enviar
-        </button>
-        <button onClick={endVisit} className="bg-red-600 text-white p-2 rounded w-full md:w-auto md:ml-2 mt-2">
-          Finalizar Visita
-        </button>
-      </div>
-    </div>
+    <ChatRoom 
+      chatRoomId={parseInt(chatRoomId!)} 
+      currentUserId={parseInt(providerId!)} 
+      isProvider={true} 
+      endVisit={endVisit}
+    />
   );
 };
 
