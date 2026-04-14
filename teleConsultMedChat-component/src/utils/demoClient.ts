@@ -187,14 +187,22 @@ class QueryBuilder<TTable extends keyof DemoTables> {
 
   private updatePatch: Record<string, unknown> = {};
 
+  private shouldReturnInsertedData = false;
+
   constructor(client: DemoSupabaseClient, table: TTable) {
     this.client = client;
     this.table = table;
   }
 
   select(columns = '*') {
+    if (this.action === 'insert') {
+      this.shouldReturnInsertedData = true;
+      this.selectColumns = columns === '*' ? '*' : columns;
+      return this;
+    }
+
     this.action = 'select';
-    this.selectColumns = columns;
+    this.selectColumns = columns === '*' ? '*' : columns;
     return this;
   }
 
@@ -288,7 +296,11 @@ class QueryBuilder<TTable extends keyof DemoTables> {
       return rows;
     }
 
-    const columns = this.selectColumns.split(',').map((column) => column.trim());
+    const columns = this.selectColumns.split(',').map((column) => column.trim()).filter((col) => col.length > 0);
+    if (columns.length === 0) {
+      return rows;
+    }
+
     return rows.map((row) => {
       const output: Record<string, unknown> = {};
       columns.forEach((column) => {
@@ -314,12 +326,14 @@ class QueryBuilder<TTable extends keyof DemoTables> {
           return 0;
         }
 
-        const sorted = String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true });
+        const leftStr = String(leftValue ?? '');
+        const rightStr = String(rightValue ?? '');
+        const sorted = leftStr.localeCompare(rightStr, undefined, { numeric: true });
         return this.orderBy!.ascending ? sorted : -sorted;
       });
     }
 
-    if (typeof this.limitValue === 'number') {
+    if (typeof this.limitValue === 'number' && this.limitValue > 0) {
       rows = rows.slice(0, this.limitValue);
     }
 
@@ -327,7 +341,7 @@ class QueryBuilder<TTable extends keyof DemoTables> {
 
     if (this.singleRow) {
       if (rows.length === 0) {
-        return { data: null, error: { message: 'No rows found.' } };
+        return { data: null, error: null };
       }
       return { data: rows[0], error: null };
     }
@@ -338,6 +352,11 @@ class QueryBuilder<TTable extends keyof DemoTables> {
   private executeInsert() {
     const state = getState();
     const now = new Date().toISOString();
+    
+    if (!Array.isArray(this.insertRows) || this.insertRows.length === 0) {
+      return { data: this.singleRow ? null : [], error: null };
+    }
+
     const rowsToInsert = this.insertRows.map((row) => {
       if (this.table === 'waitingrooms') {
         state.counters.waitingrooms += 1;
@@ -382,10 +401,34 @@ class QueryBuilder<TTable extends keyof DemoTables> {
       this.client.emit({ event: 'INSERT', table: this.table, row: row as Record<string, unknown> });
     });
 
-    const outputRows = this.pickColumns(deepClone(rowsToInsert as Array<Record<string, unknown>>));
+    // Always return full rows as inserted, don't filter unless .select() was explicitly called with specific columns
+    let outputRows: Array<Record<string, unknown>> = deepClone(rowsToInsert as Array<Record<string, unknown>>);
+
+    // Only apply pickColumns if select() was called with specific columns (not '*')
+    if (this.shouldReturnInsertedData && this.selectColumns && this.selectColumns !== '*') {
+      outputRows = this.pickColumns(outputRows);
+    }
+
+    if (this.shouldReturnInsertedData && this.orderBy) {
+      outputRows = outputRows.sort((left, right) => {
+        const leftValue = left[this.orderBy!.field];
+        const rightValue = right[this.orderBy!.field];
+        if (leftValue === rightValue) {
+          return 0;
+        }
+        const leftStr = String(leftValue ?? '');
+        const rightStr = String(rightValue ?? '');
+        const sorted = leftStr.localeCompare(rightStr, undefined, { numeric: true });
+        return this.orderBy!.ascending ? sorted : -sorted;
+      });
+    }
+
+    if (this.shouldReturnInsertedData && typeof this.limitValue === 'number' && this.limitValue > 0) {
+      outputRows = outputRows.slice(0, this.limitValue);
+    }
 
     if (this.singleRow) {
-      return { data: outputRows[0] ?? null, error: null };
+      return { data: outputRows.length > 0 ? outputRows[0] : null, error: null };
     }
 
     return { data: outputRows, error: null };
