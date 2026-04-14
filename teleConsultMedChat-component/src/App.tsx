@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, useParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import PatientDashboard from './pages/PatientDashboard';
@@ -12,6 +12,8 @@ import { SidebarProvider } from './contexts/SidebarContext';
 import { checkEnvVariables } from './utils/checkEnv';
 import ErrorPage from './pages/Error';
 
+const FIRST_VISIT_MODAL_KEY = 'teleconsult-demo-first-visit-seen';
+
 const App: React.FC = () => {
   useEffect(() => {
     checkEnvVariables();
@@ -21,6 +23,7 @@ const App: React.FC = () => {
     <SupabaseProvider>
       <SidebarProvider>
         <Router>
+          <FirstVisitDemoModal />
           <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(19,78,74,0.18),_transparent_32%),linear-gradient(180deg,_#f4fbfa_0%,_#eef5f4_100%)] text-slate-900">
             <div className="mx-auto flex min-h-screen w-full max-w-[1680px] flex-col lg:flex-row">
               <Sidebar />
@@ -43,6 +46,52 @@ const App: React.FC = () => {
         </Router>
       </SidebarProvider>
     </SupabaseProvider>
+  );
+};
+
+const FirstVisitDemoModal: React.FC = () => {
+  const location = useLocation();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (location.pathname !== '/') {
+      setIsOpen(false);
+      return;
+    }
+
+    const alreadySeen = window.localStorage.getItem(FIRST_VISIT_MODAL_KEY) === 'true';
+    setIsOpen(!alreadySeen);
+  }, [location.pathname]);
+
+  const closeModal = () => {
+    window.localStorage.setItem(FIRST_VISIT_MODAL_KEY, 'true');
+    setIsOpen(false);
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[1px]">
+      <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_28px_80px_rgba(15,23,42,0.24)] sm:p-7">
+        <h2 className="display-font text-2xl font-semibold text-slate-900">Demo Quick Guide</h2>
+        <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
+          This is a demo environment.
+          As a <span className="font-semibold text-slate-900">Patient</span>, click <span className="font-semibold text-slate-900">Start consultation</span>, wait in the waiting room, then chat when the doctor starts the visit.
+          As a <span className="font-semibold text-slate-900">Doctor</span>, open the Provider Dashboard, pick a waiting patient, click <span className="font-semibold text-slate-900">Start consultation</span>, and exchange messages in real time.
+        </p>
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition hover:-translate-y-0.5"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
