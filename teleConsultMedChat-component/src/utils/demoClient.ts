@@ -255,9 +255,9 @@ class QueryBuilder<TTable extends keyof DemoTables> {
     return this;
   }
 
-  then<TResult1 = any, TResult2 = never>(
-    onfulfilled?: ((value: { data: any; error: any }) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
+  then<TResult1 = unknown, TResult2 = never>(
+    onfulfilled?: ((value: { data: unknown; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ) {
     return this.execute().then(onfulfilled, onrejected);
   }
@@ -274,8 +274,9 @@ class QueryBuilder<TTable extends keyof DemoTables> {
         return this.executeUpdate();
       }
       return this.executeDelete();
-    } catch (error: any) {
-      return { data: null, error: { message: error?.message ?? 'Demo database error.' } };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Demo database error.';
+      return { data: null, error: { message } };
     }
   }
 
@@ -394,7 +395,7 @@ class QueryBuilder<TTable extends keyof DemoTables> {
     });
 
     const tableRows = state.tables[this.table] as Array<Record<string, unknown>>;
-    tableRows.push(...(rowsToInsert as any[]));
+    tableRows.push(...(rowsToInsert as Array<Record<string, unknown>>));
     saveState(state);
 
     rowsToInsert.forEach((row) => {

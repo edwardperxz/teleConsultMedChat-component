@@ -19,5 +19,5 @@ const createSupabaseClient = () => {
   return createClient(supabaseUrl, supabaseKey);
 };
 
-export const supabase = createSupabaseClient() as any;
+export const supabase: ReturnType<typeof createSupabaseClient> = createSupabaseClient();
 export const isDemoMode = useDemoMode;
