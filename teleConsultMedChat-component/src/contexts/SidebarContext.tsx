@@ -3,7 +3,12 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 interface SidebarProviderProps {
   children: ReactNode;
 }
-const SidebarContext = createContext<any>(null);
+interface SidebarContextValue {
+  isOpen: boolean;
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const SidebarContext = createContext<SidebarContextValue | undefined>(undefined);
 export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -14,4 +19,12 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
   );
 };
 
-export const useSidebar = () => useContext(SidebarContext);
+export const useSidebar = () => {
+  const context = useContext(SidebarContext);
+
+  if (!context) {
+    throw new Error('useSidebar must be used within a SidebarProvider.');
+  }
+
+  return context;
+};

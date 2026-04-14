@@ -10,7 +10,7 @@ const PatientChatRoom: React.FC = () => {
 
   useEffect(() => {
     if (!chatRoomId || !patientId) {
-      navigate('/error');
+      navigate('/error', { replace: true });
     }
   }, [chatRoomId, patientId, navigate]);
   useEffect(() => {
@@ -21,15 +21,14 @@ const PatientChatRoom: React.FC = () => {
         .eq('id', parseInt(chatRoomId!))
         .single();
       if (error) {
-        console.error('Error fetching chat room:', error.message, error.details, error.hint);
       } else if (data && !data.isactive) {
-        navigate('/patient-dashboard');
+        navigate('/patient-dashboard', { replace: true });
       }
     };
 
     const interval = setInterval(() => {
       checkChatRoomStatus();
-    }, 5000); // estado del chat cada 5 segundos, si no esta activo, se cierra
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [supabase, chatRoomId, navigate]);

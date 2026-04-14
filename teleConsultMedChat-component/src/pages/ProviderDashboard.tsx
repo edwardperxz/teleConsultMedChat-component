@@ -1,22 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../contexts/SupabaseContext';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaArrowRight, FaClock, FaComments, FaSpinner, FaStethoscope, FaUsers } from 'react-icons/fa';
+import { useSupabase } from '../contexts/SupabaseContext';
+import { DEMO_PROVIDER_ID, formatDateTime } from '../utils/clinic';
 
 interface WaitingPatient {
   patientid: number;
   name?: string;
 }
 
+interface ActiveConsultation {
+  id: number;
+  patientid: number;
+  createdat: string;
+  patientName?: string;
+}
+
+interface UserRecord {
+  id: number;
+  name: string;
+}
+
 const ProviderDashboard: React.FC = () => {
   const supabase = useSupabase();
   const navigate = useNavigate();
   const [waitingPatients, setWaitingPatients] = useState<WaitingPatient[]>([]);
+  const [activeConsultations, setActiveConsultations] = useState<ActiveConsultation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchWaitingPatients = async () => {
     try {
+      setIsLoading(true);
       const { data: waitingData, error: waitingError } = await supabase
         .from('waitingrooms')
-        .select('patientid');
+        .select('patientid, createdat');
       if (waitingError) {
         throw waitingError;
       }
@@ -38,25 +56,79 @@ const ProviderDashboard: React.FC = () => {
       } else {
         setWaitingPatients([]);
       }
+
+      const { data: chatData, error: chatError } = await supabase
+        .from('chatrooms')
+        .select('id, patientid, createdat')
+        .eq('providerid', DEMO_PROVIDER_ID)
+        .eq('isactive', true)
+        .order('createdat', { ascending: false });
+
+      if (chatError) {
+        throw chatError;
+      }
+
+      const activeRooms = (chatData ?? []) as ActiveConsultation[];
+
+      if (activeRooms.length > 0) {
+        const patientIds = activeRooms.map(room => room.patientid);
+        const { data: patientRecords } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', patientIds)
+          .eq('usertype', 'patient');
+
+        const patientMap = new Map<number, string>();
+        (patientRecords as UserRecord[] | null | undefined)?.forEach((record) => {
+          patientMap.set(record.id, record.name);
+        });
+
+        setActiveConsultations(activeRooms.map((room) => ({ ...room, patientName: patientMap.get(room.patientid) ?? `Patient ${room.patientid}` })));
+      } else {
+        setActiveConsultations([]);
+      }
+
+      setError(null);
     } catch (error: any) {
-      console.error('Error in fetchWaitingPatients:', error.message, error.details, error.hint);
+      setError(error?.message ?? 'Unable to load provider workspace right now.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchWaitingPatients();
-    const interval = setInterval(() => {
-      fetchWaitingPatients();
-    }, 5000); // cada 5 segundos se actualiza la lista de pacientes
-    return () => clearInterval(interval);
+    void fetchWaitingPatients();
+
+    const waitingChannel = supabase
+      .channel('provider-dashboard-waiting')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'waitingrooms' }, () => {
+        void fetchWaitingPatients();
+      })
+      .subscribe();
+
+    const chatChannel = supabase
+      .channel('provider-dashboard-chatrooms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chatrooms' }, () => {
+        void fetchWaitingPatients();
+      })
+      .subscribe();
+
+    const interval = window.setInterval(() => {
+      void fetchWaitingPatients();
+    }, 10000);
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(waitingChannel);
+      void supabase.removeChannel(chatChannel);
+    };
   }, [supabase]);
 
   const startVisit = async (patientId: number) => {
-    const providerId = 1;
     try {
       const { data, error } = await supabase
         .from('chatrooms')
-        .insert([{ providerid: providerId, patientid: patientId, isactive: true }]) // se crea un nuevo chatRoom y se redirige al paciente
+        .insert([{ providerid: DEMO_PROVIDER_ID, patientid: patientId, isactive: true }])
         .select()
         .single();
       if (error) {
@@ -68,36 +140,127 @@ const ProviderDashboard: React.FC = () => {
         .from('waitingrooms')
         .delete()
         .match({ patientid: patientId });
-      console.log('Visit started with chat room ID:', chatRoomId);
-      navigate(`/provider-chat-room/${providerId}/${chatRoomId}`);
+      navigate(`/provider-chat-room/${DEMO_PROVIDER_ID}/${chatRoomId}`);
     } catch (error: any) {
-      console.error('Error starting visit:', error.message, error.details, error.hint);
+      setError(error?.message ?? 'Unable to start the consultation right now.');
     }
   };
 
+  const metrics = [
+    { label: 'Waiting requests', value: waitingPatients.length, icon: FaUsers },
+    { label: 'Active consultations', value: activeConsultations.length, icon: FaComments },
+    { label: 'Realtime sync', value: 'On', icon: FaClock },
+  ];
+
+  if (isLoading) {
+    return (
+      <section className="flex min-h-[72vh] items-center justify-center rounded-[2rem] border border-white/70 bg-white/85 p-8 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <FaSpinner className="animate-spin text-3xl text-teal-600" />
+          <div>
+            <h2 className="display-font text-2xl font-semibold text-slate-900">Loading provider dashboard</h2>
+            <p className="mt-2 text-sm text-slate-500">Tracking the live queue and active consultations.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white shadow-lg rounded-lg p-6 md:p-12 w-full max-w-4xl">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Pacientes en Espera</h2>
-        <ul className="space-y-4">
-          {waitingPatients.length > 0 ? (
-            waitingPatients.map((patient, index) => (
-              <li key={`patient-${index}`} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg shadow">
-                <span>Paciente: {patient.name}</span>
-                <button
-                  onClick={() => startVisit(patient.patientid)}
-                  className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition duration-300"
-                >
-                  Iniciar Visita
-                </button>
-              </li>
-            ))
-          ) : (
-            <p className="text-center text-gray-600">No hay pacientes en espera.</p>
-          )}
-        </ul>
+    <section className="space-y-5 lg:space-y-6">
+      <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98),_rgba(13,148,136,0.92))] p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] sm:p-6 lg:p-7 xl:p-8">
+        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold uppercase tracking-[0.3em] text-teal-100">
+          <FaStethoscope />
+          Provider dashboard
+        </div>
+        <h1 className="display-font mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+          Manage the live clinical queue with complete clarity.
+        </h1>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200 sm:text-base lg:text-lg lg:leading-8">
+          Every waiting request and active consultation syncs in real time. Start a room, move the patient into the consultation, and close the visit when treatment is complete.
+        </p>
       </div>
-    </div>
+
+      {error && (
+        <div className="rounded-[1.7rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700 shadow-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-3 lg:gap-4">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
+
+          return (
+            <div key={metric.label} className="rounded-[1.4rem] border border-white/70 bg-white/85 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:p-5">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-medium text-slate-500 sm:text-sm">{metric.label}</div>
+                <Icon className="text-teal-600" />
+              </div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900 sm:mt-3 sm:text-3xl">{metric.value}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6">
+        <div className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-700">Waiting room</div>
+              <h2 className="display-font mt-2 text-xl font-semibold text-slate-900 sm:text-2xl">Patients ready for care</h2>
+            </div>
+            <div className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+              Live queue
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3 lg:mt-6">
+            {waitingPatients.length > 0 ? (
+              waitingPatients.map((patient, index) => (
+                <div key={`${patient.patientid}-${index}`} className="flex flex-col gap-4 rounded-[1.35rem] border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Patient</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900 sm:text-lg">{patient.name ?? `Patient ${patient.patientid}`}</div>
+                  </div>
+                  <button
+                    onClick={() => startVisit(patient.patientid)}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:-translate-y-0.5"
+                  >
+                    Start consultation
+                    <FaArrowRight />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <p className="text-sm font-medium text-slate-500">No patients are waiting right now.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:p-6">
+          <div className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-700">Active sessions</div>
+          <h3 className="display-font mt-2 text-xl font-semibold text-slate-900 sm:text-2xl">Ongoing consultations</h3>
+          <div className="mt-4 space-y-3 lg:mt-5">
+            {activeConsultations.length > 0 ? (
+              activeConsultations.map((consultation) => (
+                <div key={consultation.id} className="rounded-[1.35rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Patient</div>
+                  <div className="mt-1 text-base font-semibold text-slate-900 sm:text-lg">{consultation.patientName ?? `Patient ${consultation.patientid}`}</div>
+                  <div className="mt-2 text-sm text-slate-500">Started {formatDateTime(consultation.createdat)}</div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <p className="text-sm font-medium text-slate-500">No active consultations.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 };
 

@@ -18,12 +18,11 @@ const ProviderChatRoom: React.FC = () => {
     try {
       await supabase
         .from('chatrooms')
-        .update({ isactive: false, endedat: new Date().toISOString() }) // finaliza la cita
+        .update({ isactive: false, endedat: new Date().toISOString() })
         .eq('id', chatRoomId!);
-      console.log('Visit ended, chat room is now inactive');
       navigate('/provider-dashboard');
     } catch (error: any) {
-      console.error('Error ending visit:', error.message, error.details, error.hint);
+      navigate('/error');
     }
   };
 
