@@ -28,11 +28,11 @@ const Sidebar: React.FC = () => {
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[18rem] border-r border-white/60 bg-slate-950/95 text-white shadow-2xl shadow-slate-900/20 transition-transform duration-300 lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 lg:flex-col xl:w-80 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 lg:px-5 xl:px-7 xl:py-5">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-[17rem] border-r border-white/60 bg-slate-950/95 text-white shadow-2xl shadow-slate-900/20 transition-transform duration-300 lg:sticky lg:top-0 lg:flex lg:h-screen lg:max-h-screen lg:overflow-y-auto lg:w-[15.5rem] lg:translate-x-0 lg:flex-col xl:w-[17rem] 2xl:w-80 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 lg:px-3.5 xl:px-5 xl:py-5">
           <div>
-            <div className="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-teal-200 xl:text-sm xl:tracking-[0.35em]">Control Center</div>
-            <div className="mt-1 text-lg font-semibold text-white xl:text-xl">{CLINIC_NAME}</div>
+            <div className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-teal-200 xl:text-xs xl:tracking-[0.35em] 2xl:text-sm">Control Center</div>
+            <div className="mt-1 text-base font-semibold text-white xl:text-lg 2xl:text-xl">{CLINIC_NAME}</div>
           </div>
           <button
             onClick={() => setIsOpen(false)}
@@ -43,16 +43,16 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
 
-        <div className="px-4 py-4 lg:px-4 xl:px-7 xl:py-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-4 xl:p-5">
-            <div className="text-sm font-medium text-slate-300">Mode</div>
-            <div className="mt-2 text-xl font-semibold text-white xl:text-2xl">{isPatientPath ? 'Patient Workspace' : 'Provider Workspace'}</div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Live consultations, real-time updates, and centralized clinical workflows in one place.</p>
+        <div className="px-3 py-3 lg:px-2.5 xl:px-4 xl:py-5">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 xl:rounded-3xl xl:p-5">
+            <div className="text-xs font-medium text-slate-300 xl:text-sm">Mode</div>
+            <div className="mt-2 text-lg font-semibold text-white xl:text-xl 2xl:text-2xl">{isPatientPath ? 'Patient Workspace' : 'Provider Workspace'}</div>
+            <p className="mt-2 text-[0.82rem] leading-6 text-slate-300 xl:text-sm">Live consultations, real-time updates, and centralized clinical workflows in one place.</p>
           </div>
         </div>
 
-        <nav className="flex-1 px-3 pb-4 lg:px-3 xl:px-5 xl:pb-6">
-          <ul className="space-y-2">
+        <nav className="flex-1 px-2 pb-3 lg:px-1.5 xl:px-4 xl:pb-5">
+          <ul className="space-y-1.5 xl:space-y-2">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = item.path !== '#' && location.pathname === item.path;
@@ -60,7 +60,7 @@ const Sidebar: React.FC = () => {
               if (item.path === '#') {
                 return (
                   <li key={item.label}>
-                    <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/8 hover:text-white xl:py-3">
+                    <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-[0.82rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-white xl:py-3 xl:text-sm">
                       <Icon className="text-teal-300" />
                       <span>{item.label}</span>
                     </button>
@@ -73,7 +73,7 @@ const Sidebar: React.FC = () => {
                   <Link
                     to={item.path}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-medium transition xl:py-3 ${isActive ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-2.5 text-[0.82rem] font-medium transition xl:py-3 xl:text-sm ${isActive ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}
                   >
                     <Icon className={isActive ? 'text-white' : 'text-teal-300'} />
                     <span>{item.label}</span>
@@ -84,11 +84,11 @@ const Sidebar: React.FC = () => {
           </ul>
         </nav>
 
-        <div className="border-t border-white/10 px-4 py-4 lg:px-4 xl:px-7 xl:py-5">
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-teal-500/20 to-cyan-500/10 p-4 xl:p-5">
-            <div className="text-sm font-medium text-teal-100">System health</div>
-            <div className="mt-2 text-base font-semibold text-white xl:text-lg">Realtime sync enabled</div>
-            <p className="mt-1 text-sm leading-6 text-slate-300">Messages, room status, and queue updates are streaming live.</p>
+        <div className="border-t border-white/10 px-3 py-3 lg:px-2.5 xl:px-4 xl:py-4">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-teal-500/20 to-cyan-500/10 p-4 xl:rounded-3xl xl:p-5">
+            <div className="text-xs font-medium text-teal-100 xl:text-sm">System health</div>
+            <div className="mt-2 text-sm font-semibold text-white xl:text-base 2xl:text-lg">Realtime sync enabled</div>
+            <p className="mt-1 text-[0.8rem] leading-5 text-slate-300 xl:text-sm xl:leading-6">Messages, room status, and queue updates are streaming live.</p>
           </div>
         </div>
       </aside>

@@ -28,12 +28,18 @@ const PatientDashboard: React.FC = () => {
   const [waitingRoom, setWaitingRoom] = useState<WaitingRoomRecord | null>(null);
   const [chatRoom, setChatRoom] = useState<ChatRoomRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDashboard = async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadDashboard = async (options?: { showLoading?: boolean }) => {
+    const showLoading = options?.showLoading ?? false;
+
+    if (showLoading) {
+      setIsLoading(true);
+    } else if (!isLoading) {
+      setIsRefreshing(true);
+    }
 
     try {
       const [patientResult, waitingResult, chatResult] = await Promise.all([
@@ -59,12 +65,15 @@ const PatientDashboard: React.FC = () => {
     } catch (dashboardError: any) {
       setError(dashboardError?.message ?? 'Unable to load your dashboard right now.');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    void loadDashboard();
+    void loadDashboard({ showLoading: true });
 
     const waitingChannel = supabase
       .channel('patient-dashboard-waiting')
@@ -80,12 +89,12 @@ const PatientDashboard: React.FC = () => {
       })
       .subscribe();
 
-    const interval = window.setInterval(() => {
+    const fallbackSync = window.setInterval(() => {
       void loadDashboard();
-    }, 10000);
+    }, 2500);
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(fallbackSync);
       void supabase.removeChannel(waitingChannel);
       void supabase.removeChannel(chatChannel);
     };
@@ -147,7 +156,7 @@ const PatientDashboard: React.FC = () => {
   }
 
   return (
-    <section className="space-y-5 lg:space-y-6">
+    <section className="space-y-4 sm:space-y-5 lg:space-y-6">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
         <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-[linear-gradient(135deg,_rgba(13,148,136,0.96),_rgba(8,145,178,0.95))] p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] sm:p-6 lg:p-7 xl:p-8">
           <div className="flex flex-wrap items-center gap-3 text-sm font-semibold uppercase tracking-[0.3em] text-teal-100">
@@ -171,12 +180,12 @@ const PatientDashboard: React.FC = () => {
               {waitingRoom || chatRoom?.isactive ? 'Open current session' : 'Request consultation'}
             </button>
             <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-teal-50">
-              Real-time queue tracking is active.
+              {isRefreshing ? 'Updating live status...' : 'Real-time queue tracking is active.'}
             </div>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1 xl:gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 xl:gap-4">
           {quickStats.map((item) => {
             const Icon = item.icon;
 
@@ -199,7 +208,7 @@ const PatientDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-3 xl:gap-6">
+      <div className="grid gap-5 xl:grid-cols-3 xl:gap-6">
         <div className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:col-span-2 lg:p-6">
           <div className="flex items-center justify-between gap-4">
             <div>

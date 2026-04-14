@@ -24,6 +24,7 @@ const WaitingRoom: React.FC = () => {
   const [waitingRoomId, setWaitingRoomId] = useState<number | null>(null);
   const [waitingSince, setWaitingSince] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,8 +34,14 @@ const WaitingRoom: React.FC = () => {
   }, [patientId, navigate]);
 
   useEffect(() => {
-    const checkChatRoom = async () => {
-      setIsLoading(true);
+    const checkChatRoom = async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? false;
+
+      if (showLoading) {
+        setIsLoading(true);
+      } else if (!isLoading) {
+        setIsRefreshing(true);
+      }
 
       const [waitingResult, chatResult] = await Promise.all([
         supabase
@@ -71,9 +78,14 @@ const WaitingRoom: React.FC = () => {
       if (chatRoom?.isactive && chatRoom.id) {
         navigate(`/patient-chat-room/${DEMO_PATIENT_ID}/${chatRoom.id}`, { replace: true });
       }
+
+      if (showLoading) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
     };
 
-    void checkChatRoom();
+    void checkChatRoom({ showLoading: true });
 
     const roomChannel = supabase
       .channel('waiting-room-chatrooms')
@@ -89,12 +101,12 @@ const WaitingRoom: React.FC = () => {
       })
       .subscribe();
 
-    const interval = window.setInterval(() => {
+    const fallbackSync = window.setInterval(() => {
       void checkChatRoom();
-    }, 10000);
+    }, 1500);
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(fallbackSync);
       void supabase.removeChannel(roomChannel);
       void supabase.removeChannel(waitingChannel);
     };
@@ -127,10 +139,13 @@ const WaitingRoom: React.FC = () => {
           <FaUserMd className="text-2xl" />
         </div>
         <div className="mt-6 text-sm font-semibold uppercase tracking-[0.3em] text-teal-700">Live waiting room</div>
-        <h1 className="display-font mt-4 text-4xl font-semibold text-slate-900">Your doctor will join shortly</h1>
-        <p className="mt-4 text-base leading-8 text-slate-500">
+        <h1 className="display-font mt-4 text-3xl font-semibold text-slate-900 sm:text-4xl">Your doctor will join shortly</h1>
+        <p className="mt-4 text-sm leading-7 text-slate-500 sm:text-base sm:leading-8">
           You are currently in the live queue. This room updates in real time and will move you into the consultation the moment the doctor opens the session.
         </p>
+        <div className="mt-4 inline-flex rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-medium text-teal-800">
+          {isRefreshing ? 'Refreshing queue status...' : 'Live queue sync enabled'}
+        </div>
 
         {error && (
           <div className="mt-6 rounded-[1.4rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaCircle, FaClock, FaComments, FaPaperPlane, FaPhoneSlash, FaShieldAlt, FaSpinner, FaUser, FaUserMd, FaWifi } from 'react-icons/fa';
 import { useSupabase } from '../contexts/SupabaseContext';
@@ -6,10 +6,11 @@ import { DEMO_PATIENT_ID, DEMO_PROVIDER_ID, formatDateTime } from '../utils/clin
 
 interface Message {
   id: number;
-  senderid: number;
+  senderid: number | string;
   content: string;
   chatroomid: number;
   sentat: string;
+  optimistic?: boolean;
 }
 
 interface ChatRoomProps {
@@ -36,6 +37,20 @@ interface Participant {
 
 const sortMessages = (messages: Message[]) => [...messages].sort((left, right) => new Date(left.sentat).getTime() - new Date(right.sentat).getTime());
 
+const areMessagesEquivalent = (currentMessages: Message[], nextMessages: Message[]) => {
+  if (currentMessages.length !== nextMessages.length) {
+    return false;
+  }
+
+  return currentMessages.every((message, index) => {
+    const nextMessage = nextMessages[index];
+    return message.id === nextMessage.id
+      && message.content === nextMessage.content
+      && normalizeSenderId(message.senderid) === normalizeSenderId(nextMessage.senderid)
+      && message.sentat === nextMessage.sentat;
+  });
+};
+
 const mergeMessages = (currentMessages: Message[], nextMessages: Message[]) => {
   const messageMap = new Map<number, Message>();
 
@@ -45,10 +60,16 @@ const mergeMessages = (currentMessages: Message[], nextMessages: Message[]) => {
   return sortMessages(Array.from(messageMap.values()));
 };
 
+const normalizeSenderId = (value: number | string | null | undefined) => {
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? -1 : parsed;
+};
+
 const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvider = false, endVisit }) => {
   const supabase = useSupabase();
   const navigate = useNavigate();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const pendingOwnMessageScrollRef = useRef(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [room, setRoom] = useState<ChatRoomRecord | null>(null);
   const [participants, setParticipants] = useState<{ patient: Participant | null; provider: Participant | null }>({ patient: null, provider: null });
@@ -93,24 +114,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
       throw messagesError;
     }
 
-    setMessages(sortMessages((data as Message[]) ?? []));
-  };
-
-  const refreshRoomState = async () => {
-    const { data, error: roomError } = await supabase
-      .from('chatrooms')
-      .select('id, providerid, patientid, isactive, createdat, endedat')
-      .eq('id', chatRoomId)
-      .single();
-
-    if (!roomError && data) {
-      const updatedRoom = data as ChatRoomRecord;
-      setRoom(updatedRoom);
-
-      if (!updatedRoom.isactive && !isProvider) {
-        navigate('/patient-dashboard', { replace: true });
-      }
-    }
+    const nextMessages = sortMessages((data as Message[]) ?? []);
+    setMessages((currentMessages) => (areMessagesEquivalent(currentMessages, nextMessages) ? currentMessages : nextMessages));
   };
 
   useEffect(() => {
@@ -148,7 +153,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
       .channel(`room-status-${chatRoomId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chatrooms', filter: `id=eq.${chatRoomId}` }, (payload) => {
         const updatedRoom = payload.new as ChatRoomRecord;
-        setRoom(updatedRoom);
+        setRoom((currentRoom) => {
+          if (
+            currentRoom
+            && currentRoom.id === updatedRoom.id
+            && currentRoom.providerid === updatedRoom.providerid
+            && currentRoom.patientid === updatedRoom.patientid
+            && currentRoom.isactive === updatedRoom.isactive
+            && currentRoom.createdat === updatedRoom.createdat
+            && currentRoom.endedat === updatedRoom.endedat
+          ) {
+            return currentRoom;
+          }
+
+          return updatedRoom;
+        });
 
         if (!updatedRoom.isactive && !isProvider) {
           navigate('/patient-dashboard', { replace: true });
@@ -156,26 +175,33 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
       })
       .subscribe();
 
-    const syncInterval = window.setInterval(() => {
+    // Silent fallback sync only for message stream so the main chat layout stays stable.
+    const fallbackSync = window.setInterval(() => {
       void loadMessages();
-      void refreshRoomState();
-    }, 15000);
+    }, 1400);
 
     return () => {
       isMounted = false;
-      window.clearInterval(syncInterval);
+      window.clearInterval(fallbackSync);
       void supabase.removeChannel(messageChannel);
       void supabase.removeChannel(roomChannel);
     };
   }, [chatRoomId, isProvider, navigate, supabase]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useLayoutEffect(() => {
+    if (pendingOwnMessageScrollRef.current) {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      pendingOwnMessageScrollRef.current = false;
+    }
   }, [messages]);
 
   const patientName = participants.patient?.name ?? `Patient ${DEMO_PATIENT_ID}`;
   const providerName = participants.provider?.name ?? `Doctor ${DEMO_PROVIDER_ID}`;
   const isRoomActive = room?.isactive ?? true;
+  const currentActorId = isProvider ? (room?.providerid ?? currentUserId) : (room?.patientid ?? currentUserId);
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -190,21 +216,40 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
     setError(null);
 
     try {
-      const { error: insertError } = await supabase.from('messages').insert([
+      const optimisticId = -Date.now();
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        senderid: currentActorId,
+        content: trimmedMessage,
+        chatroomid: chatRoomId,
+        sentat: new Date().toISOString(),
+        optimistic: true,
+      };
+
+      pendingOwnMessageScrollRef.current = true;
+      setMessages((currentMessages) => mergeMessages(currentMessages, [optimisticMessage]));
+      setNewMessage('');
+
+      const { data: insertedMessage, error: insertError } = await supabase.from('messages').insert([
         {
           chatroomid: chatRoomId,
-          senderid: currentUserId,
+          senderid: currentActorId,
           content: trimmedMessage,
         },
-      ]);
+      ]).select('*').single();
 
       if (insertError) {
         throw insertError;
       }
 
-      setNewMessage('');
-      void loadMessages();
+      if (insertedMessage) {
+        setMessages((currentMessages) => {
+          const withoutOptimistic = currentMessages.filter((message) => message.id !== optimisticId);
+          return mergeMessages(withoutOptimistic, [insertedMessage as Message]);
+        });
+      }
     } catch (sendError: any) {
+      setMessages((currentMessages) => currentMessages.filter((message) => !message.optimistic));
       setError(sendError?.message ?? 'Unable to send the message right now.');
     } finally {
       setIsSending(false);
@@ -229,9 +274,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
 
   return (
     <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-      <div className="grid min-h-[78vh] lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-h-[78vh] flex-col border-b border-slate-200/80 lg:border-b-0 lg:border-r">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-5 py-5 sm:px-8">
+      <div className="grid min-h-[72vh] xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-h-[72vh] flex-col border-b border-slate-200/80 xl:border-b-0 xl:border-r">
+          <div className="flex flex-col gap-4 border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-start lg:justify-between lg:px-7">
             <div className="flex items-start gap-4">
               <button
                 onClick={() => navigate(isProvider ? '/provider-dashboard' : '/patient-dashboard')}
@@ -246,14 +291,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
                   <FaCircle className={isRoomActive ? 'text-emerald-500' : 'text-rose-500'} />
                   Live consultation
                 </div>
-                <h2 className="display-font mt-2 text-3xl font-semibold text-slate-900">Doctor - patient chat</h2>
+                <h2 className="display-font mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">Doctor - patient chat</h2>
                 <p className="mt-2 text-sm text-slate-500">
                   {isProvider ? 'Attending doctor' : 'Patient'} conversation between {providerName} and {patientName}.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 text-right">
+            <div className="flex flex-wrap items-center gap-2 text-left lg:flex-col lg:items-end lg:text-right">
               <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${isRoomActive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                 <FaWifi />
                 {isRoomActive ? 'Connected' : 'Ended'}
@@ -268,7 +313,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-7">
             {messages.length === 0 ? (
               <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-600">
@@ -282,14 +327,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
             ) : (
               <div className="space-y-4">
                 {messages.map((message) => {
-                  const isOwnMessage = message.senderid === currentUserId;
-                  const senderLabel = isOwnMessage ? 'You' : message.senderid === room?.providerid ? providerName : patientName;
+                  const senderId = normalizeSenderId(message.senderid);
+                  const isProviderMessage = senderId === room?.providerid;
+                  const isOwnMessage = senderId === currentActorId;
+                  const senderRole = isProviderMessage ? 'Doctor' : 'Patient';
+                  const senderName = isProviderMessage ? providerName : patientName;
+                  const senderLabel = isOwnMessage ? `You (${senderRole})` : `${senderRole}: ${senderName}`;
+                  const ownMessageStyle = isProviderMessage
+                    ? 'bg-gradient-to-br from-sky-600 to-blue-700 text-white'
+                    : 'bg-gradient-to-br from-teal-600 to-emerald-600 text-white';
+                  const incomingMessageStyle = isProviderMessage
+                    ? 'border border-sky-200 bg-sky-50 text-slate-900'
+                    : 'border border-emerald-200 bg-emerald-50 text-slate-900';
 
                   return (
                     <div key={message.id} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[min(100%,46rem)] rounded-[1.6rem] px-4 py-3 shadow-sm sm:px-5 sm:py-4 ${isOwnMessage ? 'bg-gradient-to-br from-teal-600 to-cyan-600 text-white' : 'border border-slate-200 bg-white text-slate-900'}`}>
+                      <div className={`max-w-[min(100%,44rem)] rounded-[1.6rem] px-4 py-3 shadow-sm sm:px-5 sm:py-4 ${isOwnMessage ? ownMessageStyle : incomingMessageStyle}`}>
                         <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
-                          {isOwnMessage ? <FaUser /> : <FaUserMd />}
+                          {isProviderMessage ? <FaUserMd /> : <FaUser />}
                           {senderLabel}
                         </div>
                         <p className="text-sm leading-7 sm:text-[0.98rem]">{message.content}</p>
@@ -301,12 +356,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
                     </div>
                   );
                 })}
-                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
 
-          <form onSubmit={sendMessage} className="border-t border-slate-200/80 bg-white px-4 py-4 sm:px-8">
+          <form onSubmit={sendMessage} className="border-t border-slate-200/80 bg-white px-4 py-4 sm:px-6 lg:px-7">
             <div className="flex flex-col gap-3 rounded-[1.6rem] border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
               <input
                 type="text"
@@ -345,7 +399,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
           </form>
         </div>
 
-        <aside className="bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(15,23,42,0.92))] px-5 py-6 text-white sm:px-8 lg:px-7">
+        <aside className="bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(15,23,42,0.92))] px-4 py-5 text-white sm:px-6 sm:py-6 xl:px-6 2xl:px-7">
           <div className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5 shadow-2xl shadow-slate-950/20">
             <div className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-200">Session Summary</div>
             <h3 className="display-font mt-3 text-2xl font-semibold text-white">{isProvider ? 'Doctor workspace' : 'Patient workspace'}</h3>

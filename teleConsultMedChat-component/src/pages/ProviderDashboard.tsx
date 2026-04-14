@@ -27,11 +27,19 @@ const ProviderDashboard: React.FC = () => {
   const [waitingPatients, setWaitingPatients] = useState<WaitingPatient[]>([]);
   const [activeConsultations, setActiveConsultations] = useState<ActiveConsultation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWaitingPatients = async () => {
+  const fetchWaitingPatients = async (options?: { showLoading?: boolean }) => {
+    const showLoading = options?.showLoading ?? false;
+
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      } else if (!isLoading) {
+        setIsRefreshing(true);
+      }
+
       const { data: waitingData, error: waitingError } = await supabase
         .from('waitingrooms')
         .select('patientid, createdat');
@@ -92,12 +100,15 @@ const ProviderDashboard: React.FC = () => {
     } catch (error: any) {
       setError(error?.message ?? 'Unable to load provider workspace right now.');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    void fetchWaitingPatients();
+    void fetchWaitingPatients({ showLoading: true });
 
     const waitingChannel = supabase
       .channel('provider-dashboard-waiting')
@@ -113,12 +124,12 @@ const ProviderDashboard: React.FC = () => {
       })
       .subscribe();
 
-    const interval = window.setInterval(() => {
+    const fallbackSync = window.setInterval(() => {
       void fetchWaitingPatients();
-    }, 10000);
+    }, 2500);
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(fallbackSync);
       void supabase.removeChannel(waitingChannel);
       void supabase.removeChannel(chatChannel);
     };
@@ -167,7 +178,7 @@ const ProviderDashboard: React.FC = () => {
   }
 
   return (
-    <section className="space-y-5 lg:space-y-6">
+    <section className="space-y-4 sm:space-y-5 lg:space-y-6">
       <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98),_rgba(13,148,136,0.92))] p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] sm:p-6 lg:p-7 xl:p-8">
         <div className="flex flex-wrap items-center gap-3 text-sm font-semibold uppercase tracking-[0.3em] text-teal-100">
           <FaStethoscope />
@@ -179,6 +190,9 @@ const ProviderDashboard: React.FC = () => {
         <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200 sm:text-base lg:text-lg lg:leading-8">
           Every waiting request and active consultation syncs in real time. Start a room, move the patient into the consultation, and close the visit when treatment is complete.
         </p>
+        <div className="mt-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-teal-50">
+          {isRefreshing ? 'Updating live queue...' : 'Live queue sync enabled'}
+        </div>
       </div>
 
       {error && (
@@ -187,7 +201,7 @@ const ProviderDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3 lg:gap-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:gap-4">
         {metrics.map((metric) => {
           const Icon = metric.icon;
 
@@ -203,7 +217,7 @@ const ProviderDashboard: React.FC = () => {
         })}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6">
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6">
         <div className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:p-6">
           <div className="flex items-center justify-between gap-4">
             <div>

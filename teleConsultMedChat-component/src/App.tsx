@@ -26,7 +26,7 @@ const App: React.FC = () => {
               <Sidebar />
               <div className="flex flex-1 flex-col overflow-hidden">
                 <Header />
-                <main className="flex-1 overflow-y-auto px-3 py-5 sm:px-4 sm:py-6 lg:px-5 lg:py-6 xl:px-8">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 lg:px-4 lg:py-5 xl:px-7 xl:py-6 2xl:px-8">
                   <Routes>
                     <Route key="home" path="/" element={<PatientDashboard />} />
                     <Route key="patient-dashboard" path="/patient-dashboard" element={<PatientDashboard />} />
