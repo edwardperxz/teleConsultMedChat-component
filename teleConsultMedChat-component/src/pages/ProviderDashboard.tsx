@@ -47,7 +47,8 @@ const ProviderDashboard: React.FC = () => {
         throw waitingError;
       }
       if (waitingData && waitingData.length > 0) {
-        const patientIds = waitingData.map(patient => patient.patientid);
+        const typedWaitingData = waitingData as WaitingPatient[];
+        const patientIds = typedWaitingData.map((patient: WaitingPatient) => patient.patientid);
         const { data: patientData, error: patientError } = await supabase
           .from('users')
           .select('id, name')
@@ -56,9 +57,10 @@ const ProviderDashboard: React.FC = () => {
         if (patientError) {
           throw patientError;
         }
-        const combinedData = waitingData.map(patient => ({
+        const typedPatientData = ((patientData ?? []) as UserRecord[]);
+        const combinedData = typedWaitingData.map((patient: WaitingPatient) => ({
           ...patient,
-          name: patientData.find(p => p.id === patient.patientid)?.name
+          name: typedPatientData.find((p: UserRecord) => p.id === patient.patientid)?.name,
         }));
         setWaitingPatients(combinedData);
       } else {

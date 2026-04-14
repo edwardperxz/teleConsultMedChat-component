@@ -144,14 +144,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ chatRoomId, currentUserId, isProvid
 
     const messageChannel = supabase
       .channel(`messages-room-${chatRoomId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chatroomid=eq.${chatRoomId}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chatroomid=eq.${chatRoomId}` }, (payload: any) => {
         setMessages((currentMessages) => mergeMessages(currentMessages, [payload.new as Message]));
       })
       .subscribe();
 
     const roomChannel = supabase
       .channel(`room-status-${chatRoomId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chatrooms', filter: `id=eq.${chatRoomId}` }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chatrooms', filter: `id=eq.${chatRoomId}` }, (payload: any) => {
         const updatedRoom = payload.new as ChatRoomRecord;
         setRoom((currentRoom) => {
           if (
