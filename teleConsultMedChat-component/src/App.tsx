@@ -75,11 +75,15 @@ const FirstVisitDemoModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[1px]">
       <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_28px_80px_rgba(15,23,42,0.24)] sm:p-7">
-        <h2 className="display-font text-2xl font-semibold text-slate-900">Demo Quick Guide</h2>
+        <h2 className="display-font text-2xl font-semibold text-slate-900">How to Use This Demo</h2>
         <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
-          This is a demo environment.
-          As a <span className="font-semibold text-slate-900">Patient</span>, click <span className="font-semibold text-slate-900">Start consultation</span>, wait in the waiting room, then chat when the doctor starts the visit.
-          As a <span className="font-semibold text-slate-900">Doctor</span>, open the Provider Dashboard, pick a waiting patient, click <span className="font-semibold text-slate-900">Start consultation</span>, and exchange messages in real time.
+          This is a demo of a medical chat.
+          <span className="block mt-2">
+            <span className="font-semibold text-slate-900">Patient:</span> Click <span className="font-semibold text-slate-900">Start consultation</span>, wait in the waiting room, and begin chatting when the doctor opens your session.
+          </span>
+          <span className="block mt-2">
+            <span className="font-semibold text-slate-900">Doctor:</span> Use the left menu to open <span className="font-semibold text-slate-900">Provider Dashboard</span>, choose a waiting patient, and click <span className="font-semibold text-slate-900">Start consultation</span> to begin the chat.
+          </span>
         </p>
         <div className="mt-6 flex justify-end">
           <button
