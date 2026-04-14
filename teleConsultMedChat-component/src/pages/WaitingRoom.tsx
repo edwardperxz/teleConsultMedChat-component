@@ -66,8 +66,10 @@ const WaitingRoom: React.FC = () => {
         setError(chatResult.error.message);
       }
 
-      const waitingRoom = (waitingResult.data?.[0] ?? null) as WaitingRoomRecord | null;
-      const chatRoom = (chatResult.data?.[0] ?? null) as ChatRoomRecord | null;
+      const waitingRows = (waitingResult.data as WaitingRoomRecord[] | null) ?? [];
+      const chatRows = (chatResult.data as ChatRoomRecord[] | null) ?? [];
+      const waitingRoom = waitingRows[0] ?? null;
+      const chatRoom = chatRows[0] ?? null;
 
       setWaitingRoomId(waitingRoom?.id ?? null);
       setWaitingSince(waitingRoom?.createdat ?? null);

@@ -59,9 +59,11 @@ const PatientDashboard: React.FC = () => {
       ]);
 
       const profile = patientResult.data as PatientProfile | null;
+      const waitingRows = (waitingResult.data as WaitingRoomRecord[] | null) ?? [];
+      const chatRows = (chatResult.data as ChatRoomRecord[] | null) ?? [];
       setPatientName(profile?.name ?? 'Patient');
-      setWaitingRoom(((waitingResult.data?.[0] ?? null) as WaitingRoomRecord | null));
-      setChatRoom(((chatResult.data?.[0] ?? null) as ChatRoomRecord | null));
+      setWaitingRoom(waitingRows[0] ?? null);
+      setChatRoom(chatRows[0] ?? null);
     } catch (dashboardError: any) {
       setError(dashboardError?.message ?? 'Unable to load your dashboard right now.');
     } finally {

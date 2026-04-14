@@ -20,8 +20,9 @@ const PatientChatRoom: React.FC = () => {
         .select('isactive')
         .eq('id', parseInt(chatRoomId!))
         .single();
+      const roomStatus = data as { isactive: boolean } | null;
       if (error) {
-      } else if (data && !data.isactive) {
+      } else if (roomStatus && !roomStatus.isactive) {
         navigate('/patient-dashboard', { replace: true });
       }
     };

@@ -46,8 +46,8 @@ const ProviderDashboard: React.FC = () => {
       if (waitingError) {
         throw waitingError;
       }
-      if (waitingData && waitingData.length > 0) {
-        const typedWaitingData = waitingData as WaitingPatient[];
+      const typedWaitingData = (waitingData as WaitingPatient[] | null) ?? [];
+      if (typedWaitingData.length > 0) {
         const patientIds = typedWaitingData.map((patient: WaitingPatient) => patient.patientid);
         const { data: patientData, error: patientError } = await supabase
           .from('users')
@@ -148,7 +148,12 @@ const ProviderDashboard: React.FC = () => {
         throw error;
       }
 
-      const chatRoomId = data.id;
+      const createdRoom = data as { id: number } | null;
+      if (!createdRoom?.id) {
+        throw new Error('Unable to create consultation room.');
+      }
+
+      const chatRoomId = createdRoom.id;
       await supabase
         .from('waitingrooms')
         .delete()
